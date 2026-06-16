@@ -117,7 +117,7 @@ Le graphique tourne dans l'iframe sandboxée de l'hôte : les `<script>` doivent
 ## Tests
 
 ```bash
-pytest        # 89 tests, un fichier par fonctionnalité
+pytest        # 93 tests, un fichier par fonctionnalité
 ```
 
 - `test_data_utils.py` — parsing + détection de type de colonne
@@ -133,3 +133,4 @@ pytest        # 89 tests, un fichier par fonctionnalité
 - **Assets** : par défaut chargés depuis `cdn.jsdelivr.net`, mais entièrement configurables (voir `CHART_MCP_ASSETS` ci-dessus) — inline ou auto-hébergés pour un environnement sans accès internet. L'iframe mcp-ui est sandboxée (`allow-scripts`).
 - **Téléchargement** : le téléchargement par ancre nécessite que l'hôte autorise `allow-downloads` sur l'iframe. À défaut, le fichier est transmis à l'hôte via une action mcp-ui `link` (data-URL) en repli.
 - Export Excel **réel** (`.xlsx`) via SheetJS ; le CSV est généré nativement (BOM UTF-8 pour Excel).
+- **En-tête Host / erreur 421** : en transport HTTP, le SDK MCP active une protection anti DNS-rebinding qui ne tolère que `localhost` par défaut. Si le serveur est joint via un vrai nom d'hôte, déclarer celui-ci dans `CHART_MCP_ALLOWED_HOSTS` (ex. `applflwlrec001.chronodrive.local:*`, `:*` = tout port ; `*` désactive la vérification). Sinon les requêtes sont rejetées en `421 Misdirected Request` (« Invalid Host header »). Le chemin de l'endpoint (`/mcp` par défaut) est ajustable via `CHART_MCP_HTTP_PATH`.

@@ -10,9 +10,11 @@ data table).
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ContentBlock, TextContent
 from mcp_ui_server import create_ui_resource
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -25,7 +27,36 @@ from .data_reduce import DEFAULT_MAX_ROWS, build_summary, prepare_data
 from .data_utils import records_to_dataframe
 from .ui_builder import build_chart_html
 
-mcp = FastMCP("chart_mcp")
+def _build_transport_security() -> TransportSecuritySettings:
+    """Configure DNS-rebinding protection from the environment.
+
+    The MCP streamable-HTTP transport rejects requests whose ``Host`` header is
+    not allow-listed (returns 421). FastMCP only auto-allows loopback, so a
+    server bound to 0.0.0.0 and reached via a real hostname must declare it.
+
+    ``CHART_MCP_ALLOWED_HOSTS`` (comma-separated ``host[:port]`` entries):
+      * unset  -> protection disabled (reachable on any hostname; intended for
+                  internal networks / behind a reverse proxy).
+      * "*"    -> protection disabled explicitly.
+      * a list -> protection enabled, locked to those hosts. A ``:*`` suffix
+                  matches any port, e.g. ``app.internal:*``.
+    """
+    raw = os.getenv("CHART_MCP_ALLOWED_HOSTS", "").strip()
+    if raw == "" or raw == "*":
+        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+    hosts = [h.strip() for h in raw.split(",") if h.strip()]
+    origins: list[str] = []
+    for h in hosts:
+        origins += [f"http://{h}", f"https://{h}"]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
+
+
+mcp = FastMCP("chart_mcp", transport_security=_build_transport_security())
 
 # mcp-ui URIs must start with this scheme.
 _UI_URI = "ui://chart-mcp/render"
@@ -230,6 +261,11 @@ def main() -> None:
     if args.transport == "http":
         mcp.settings.host = args.host
         mcp.settings.port = args.port
+        # The MCP endpoint path (default "/mcp"). Override to match the client
+        # URL, e.g. CHART_MCP_HTTP_PATH=/mcp-builder.
+        http_path = os.getenv("CHART_MCP_HTTP_PATH", "").strip()
+        if http_path:
+            mcp.settings.streamable_http_path = http_path
         mcp.run(transport="streamable-http")
     else:
         mcp.run()

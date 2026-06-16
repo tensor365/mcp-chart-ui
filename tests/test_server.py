@@ -134,3 +134,44 @@ def test_invalid_group_by_raises():
 def test_invalid_max_rows_rejected():
     with pytest.raises(ValidationError):
         RenderChartInput(data=SAMPLE, max_rows=1)
+
+
+# --- transport security (DNS-rebinding / Host header) ----------------------
+
+import os as _os
+
+from mcp.server.transport_security import TransportSecurityMiddleware
+from chart_mcp.server import _build_transport_security
+
+
+def _reload_ts(monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("CHART_MCP_ALLOWED_HOSTS", raising=False)
+    else:
+        monkeypatch.setenv("CHART_MCP_ALLOWED_HOSTS", value)
+    return _build_transport_security()
+
+
+def test_security_disabled_when_unset(monkeypatch):
+    ts = _reload_ts(monkeypatch, None)
+    assert ts.enable_dns_rebinding_protection is False
+
+
+def test_security_disabled_with_star(monkeypatch):
+    ts = _reload_ts(monkeypatch, "*")
+    assert ts.enable_dns_rebinding_protection is False
+
+
+def test_security_allows_listed_host(monkeypatch):
+    ts = _reload_ts(monkeypatch, "app.internal:*, 10.0.4.10:8013")
+    assert ts.enable_dns_rebinding_protection is True
+    mw = TransportSecurityMiddleware(ts)
+    assert mw._validate_host("app.internal:8013") is True
+    assert mw._validate_host("10.0.4.10:8013") is True
+
+
+def test_security_rejects_unlisted_host(monkeypatch):
+    ts = _reload_ts(monkeypatch, "app.internal:*")
+    mw = TransportSecurityMiddleware(ts)
+    assert mw._validate_host("evil.com:8013") is False
+    assert mw._validate_host(None) is False

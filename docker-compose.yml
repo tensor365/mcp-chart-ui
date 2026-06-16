@@ -15,3 +15,11 @@ services:
       - CHART_MCP_ASSETS=http://chart-mcp:8000/assets
       # Or embed everything in the page (no network at all):
       # - CHART_MCP_ASSETS=inline
+      #
+      # DNS-rebinding protection: the streamable-HTTP transport returns 421
+      # "Invalid Host header" unless the public Host is allow-listed. Set the
+      # hostname(s) clients use (":*" matches any port); "*" disables the check.
+      - CHART_MCP_ALLOWED_HOSTS=applflwlrec001.chronodrive.local:*
+      # Override the MCP endpoint path if your client expects something other
+      # than the default "/mcp":
+      # - CHART_MCP_HTTP_PATH=/mcp-builder
