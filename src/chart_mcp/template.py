@@ -148,6 +148,8 @@ __XLSX_TAG__
     document.getElementById("panel-chart").classList.toggle("active", isChart);
     document.getElementById("panel-table").classList.toggle("active", !isChart);
     if (isChart && chart) { chart.resize(); }
+    // Panel heights differ; tell the host to refit after the switch paints.
+    if (typeof reportSize === "function") { setTimeout(reportSize, 50); }
   }
   document.getElementById("tab-chart").addEventListener("click", function () { activate("chart"); });
   document.getElementById("tab-table").addEventListener("click", function () { activate("table"); });
@@ -395,9 +397,28 @@ __XLSX_TAG__
     }
   }
 
+  // ---- Auto-fit height ---------------------------------------------------
+  // Tell the host how tall the content is so it sizes the iframe (no scrollbar).
+  // mcp-ui hosts honour `ui-size-change`; hosts that read the DOM height get it
+  // for free since the body grows to its content (no fixed/100vh height).
+  function reportSize() {
+    var h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    if (h > 0) { postAction("ui-size-change", { height: h }); }
+  }
+
+  if (typeof ResizeObserver !== "undefined") {
+    var ro = new ResizeObserver(function () { reportSize(); });
+    ro.observe(document.documentElement);
+  } else {
+    window.addEventListener("resize", reportSize);
+  }
+
   // ---- Boot --------------------------------------------------------------
   renderTable();
   initChart();
+  // Report after layout settles (and again shortly after, once the chart paints).
+  requestAnimationFrame(reportSize);
+  setTimeout(reportSize, 300);
 })();
 </script>
 </body>

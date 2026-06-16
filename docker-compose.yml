@@ -9,13 +9,16 @@ services:
     # Streamable HTTP endpoint is served at http://localhost:8000/mcp
     command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
     environment:
-      # How the chart UI loads ECharts/SheetJS inside the host iframe:
-      #   cdn (default) | inline | <base-url>
-      # For an air-gapped / proxied stack, let this server host the JS itself:
-      - CHART_MCP_ASSETS=http://chart-mcp:8000/assets
-      # Or embed everything in the page (no network at all):
-      # - CHART_MCP_ASSETS=inline
-      #
+      # How the chart UI loads ECharts/SheetJS INSIDE THE BROWSER's iframe.
+      #   inline       -> libs embedded in the page. No network at all. Most
+      #                   robust when the host sandbox blocks egress. (recommended)
+      #   cdn          -> jsDelivr (needs internet egress from the browser).
+      #   <public-url> -> e.g. http://applflwlrec001.chronodrive.local:8013/assets
+      #                   The server hosts the JS on its own /assets route. NOTE:
+      #                   it must be the URL the *browser* can reach, NOT the
+      #                   docker service name (http://chart-mcp:8000 won't resolve
+      #                   in the browser).
+      - CHART_MCP_ASSETS=inline
       # DNS-rebinding protection: the streamable-HTTP transport returns 421
       # "Invalid Host header" unless the public Host is allow-listed. Set the
       # hostname(s) clients use (":*" matches any port); "*" disables the check.
