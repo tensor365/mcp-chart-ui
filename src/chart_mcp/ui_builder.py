@@ -32,6 +32,7 @@ def build_chart_html(
     asset_tags: AssetTags | None = None,
     map_selection: bool | None = None,
     warnings: Sequence[str] = (),
+    download_urls: dict[str, str] | None = None,
 ) -> str:
     """Render the complete two-tab HTML document.
 
@@ -46,6 +47,10 @@ def build_chart_html(
         map_selection: Whether a chart selection can highlight table rows.
             Defaults to ``False`` for histograms, ``True`` otherwise.
         warnings: Human-readable notes (e.g. truncation) shown in a banner.
+        download_urls: Optional ``{"csv": url, "xlsx": url}`` server endpoints.
+            When provided, the download buttons emit an mcp-ui ``link`` action to
+            these URLs (works inside the sandbox); otherwise they fall back to
+            in-iframe generation.
 
     Returns:
         A full standalone HTML document as a string.
@@ -56,6 +61,7 @@ def build_chart_html(
         asset_tags = resolve_asset_tags()
     if map_selection is None:
         map_selection = plan.chart_type is not ChartType.HISTOGRAM
+    download_urls = download_urls or {}
 
     option = build_echarts_option(df, plan, title)
     columns, rows = dataframe_to_columns_and_rows(table_df)
@@ -79,6 +85,8 @@ def build_chart_html(
         "__ROWS_JSON__": _json_for_script(rows),
         "__MAP_SELECTION_JSON__": _json_for_script(bool(map_selection)),
         "__WARNINGS_JSON__": _json_for_script(list(warnings)),
+        "__CSV_URL_JSON__": _json_for_script(download_urls.get("csv")),
+        "__XLSX_URL_JSON__": _json_for_script(download_urls.get("xlsx")),
     }
 
     html = HTML_TEMPLATE

@@ -117,7 +117,7 @@ Le graphique tourne dans l'iframe sandboxée de l'hôte : les `<script>` doivent
 ## Tests
 
 ```bash
-pytest        # 93 tests, un fichier par fonctionnalité
+pytest        # 110 tests, un fichier par fonctionnalité
 ```
 
 - `test_data_utils.py` — parsing + détection de type de colonne

@@ -25,6 +25,7 @@ from .assets import ASSET_FILES, read_vendor, resolve_asset_tags
 from .chart_selector import ChartType, select_chart
 from .data_reduce import DEFAULT_MAX_ROWS, build_summary, prepare_data
 from .data_utils import records_to_dataframe
+from . import downloads
 from .ui_builder import build_chart_html
 
 def _build_transport_security() -> TransportSecuritySettings:
@@ -63,6 +64,22 @@ _UI_URI = "ui://chart-mcp/render"
 
 # In-memory cache of vendored asset sources (served over /assets/).
 _ASSET_CACHE: dict[str, str] = {}
+
+
+def _public_base_url() -> str | None:
+    """Browser-reachable base URL of this server, for download links.
+
+    Order: ``CHART_MCP_PUBLIC_URL`` -> the origin of ``CHART_MCP_ASSETS`` when it
+    is an http(s) URL -> None (downloads then fall back to in-iframe generation,
+    which the mcp-ui sandbox may block).
+    """
+    pub = os.getenv("CHART_MCP_PUBLIC_URL", "").strip().rstrip("/")
+    if pub:
+        return pub
+    assets = os.getenv("CHART_MCP_ASSETS", "").strip().rstrip("/")
+    if assets.startswith("http"):
+        return assets[: -len("/assets")] if assets.endswith("/assets") else assets
+    return None
 
 
 class RenderChartInput(BaseModel):
@@ -203,6 +220,17 @@ def render_chart(params: RenderChartInput) -> list[ContentBlock]:
 
     prepared = prepare_data(df, plan, max_rows=params.max_rows, top_n=params.top_n)
 
+    # Build download links when a browser-reachable base URL is known; otherwise
+    # the UI falls back to (sandbox-limited) in-iframe file generation.
+    base = _public_base_url()
+    download_urls = None
+    if base is not None:
+        token = downloads.register(prepared.table_df, params.title)
+        download_urls = {
+            "csv": f"{base}/download/{token}/csv",
+            "xlsx": f"{base}/download/{token}/xlsx",
+        }
+
     html = build_chart_html(
         prepared.chart_df,
         plan,
@@ -211,6 +239,7 @@ def render_chart(params: RenderChartInput) -> list[ContentBlock]:
         asset_tags=resolve_asset_tags(),
         map_selection=prepared.map_selection,
         warnings=prepared.warnings,
+        download_urls=download_urls,
     )
 
     resource = create_ui_resource(
@@ -242,6 +271,31 @@ async def serve_asset(request: Request) -> Response:
         _ASSET_CACHE[key],
         media_type="application/javascript",
         headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@mcp.custom_route("/download/{token}/{kind}", methods=["GET"])
+async def serve_download(request: Request) -> Response:
+    """Serve a generated CSV/XLSX file with an attachment disposition.
+
+    Downloads cannot happen inside the ``allow-scripts`` sandbox, so the UI
+    routes its download buttons here via an mcp-ui ``link`` action.
+    """
+    token = request.path_params["token"]
+    kind = request.path_params["kind"]
+    entry = downloads.get(token)
+    if entry is None or kind not in ("csv", "xlsx"):
+        return Response("Not found", status_code=404)
+
+    if kind == "csv":
+        data, media_type, ext = entry["csv"], downloads.CSV_MIME, "csv"
+    else:
+        data, media_type, ext = entry["xlsx"], downloads.XLSX_MIME, "xlsx"
+
+    return Response(
+        data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{entry["name"]}.{ext}"'},
     )
 
 

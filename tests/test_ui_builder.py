@@ -110,3 +110,48 @@ def test_table_uses_table_df_not_chart_df():
     m = re.search(r"var ROWS\s*=\s*(.*?);\n", html, re.S)
     rows = json.loads(m.group(1).replace("\\u003c", "<"))
     assert len(rows) == 2
+
+
+def test_download_urls_are_injected():
+    df = records_to_dataframe([{"c": "A", "v": 1}, {"c": "B", "v": 2}])
+    plan = select_chart(df)
+    html = build_chart_html(
+        df, plan, "T",
+        download_urls={"csv": "http://h:8013/download/tok/csv",
+                       "xlsx": "http://h:8013/download/tok/xlsx"},
+    )
+    assert "http://h:8013/download/tok/csv" in html
+    assert "http://h:8013/download/tok/xlsx" in html
+    assert "var CSV_URL" in html
+
+
+def test_no_download_urls_yields_null():
+    import re
+    df = records_to_dataframe([{"c": "A", "v": 1}, {"c": "B", "v": 2}])
+    plan = select_chart(df)
+    html = build_chart_html(df, plan, "T")
+    assert re.search(r"var CSV_URL\s*=\s*null;", html)
+
+
+def test_chart_title_not_in_echarts_option():
+    # Title lives in the page header, not the ECharts option (avoids toolbox overlap).
+    from chart_mcp.chart_options import build_echarts_option
+    df = records_to_dataframe([{"c": "A", "v": 1}, {"c": "B", "v": 2}])
+    plan = select_chart(df)
+    opt = build_echarts_option(df, plan, "My Title")
+    assert "title" not in opt
+
+
+# --- robust export (sandbox-safe clipboard fallback) -----------------------
+
+def test_export_has_clipboard_fallback_and_toast():
+    html = _html([{"c": "A", "v": 1}, {"c": "B", "v": 2}])
+    assert 'id="dl-copy"' in html          # explicit copy button
+    assert 'id="toast"' in html            # user feedback element
+    assert "function copyText" in html     # execCommand-based copy helper
+    assert 'execCommand("copy")' in html
+
+
+def test_export_still_offers_csv_and_excel():
+    html = _html([{"c": "A", "v": 1}, {"c": "B", "v": 2}])
+    assert 'id="dl-csv"' in html and 'id="dl-xlsx"' in html

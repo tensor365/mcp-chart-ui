@@ -51,23 +51,25 @@ def _toolbox(include_brush: bool) -> dict[str, Any]:
     }
     if include_brush:
         feature["brush"] = {"type": ["rect", "polygon", "clear"]}
-    return {"feature": feature, "right": 12}
+    return {"feature": feature, "right": 8, "top": 2}
 
 
 def _legend(names: list[str]) -> dict[str, Any]:
-    return {"data": names, "type": "scroll", "top": 28}
+    # Leave the top-right corner free for the toolbox icons.
+    return {"data": names, "type": "scroll", "top": 6, "left": "center", "right": 120}
 
 
 def _base_option(title: str) -> dict[str, Any]:
+    # The title is shown in the page header (HTML), not inside the chart, to
+    # avoid overlapping the toolbox icons and duplicating the heading.
     return {
-        "title": {"text": title, "left": "center"},
         "tooltip": {"trigger": "item"},
         "animationDuration": 400,
     }
 
 
 def _cartesian_grid() -> dict[str, Any]:
-    return {"left": 56, "right": 24, "bottom": 64, "top": 72, "containLabel": True}
+    return {"left": 56, "right": 24, "bottom": 64, "top": 44, "containLabel": True}
 
 
 def _datazoom() -> list[dict[str, Any]]:

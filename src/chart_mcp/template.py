@@ -57,6 +57,11 @@ HTML_TEMPLATE = r"""<!doctype html>
   .selbar.show { display: flex; }
   .selbar button { margin-left: auto; }
   .empty { color: var(--muted); font-size: 13px; padding: 12px; }
+  .toast { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+           max-width: 92%; background: #1f2933; color: #fff; padding: 9px 14px;
+           border-radius: 8px; font-size: 12.5px; opacity: 0; pointer-events: none;
+           transition: opacity .2s; z-index: 50; }
+  .toast.show { opacity: 0.96; }
   .warn { display: none; margin: 0 0 12px; padding: 8px 12px; font-size: 12.5px;
           background: #fff8e1; border: 1px solid #f6d97a; border-radius: 8px; color: #7a5b00; }
   .warn.show { display: block; }
@@ -100,10 +105,16 @@ HTML_TEMPLATE = r"""<!doctype html>
                stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
           Excel
         </button>
+        <button class="iconbtn" id="dl-copy" type="button" title="Copier les données (CSV) dans le presse-papiers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copier
+        </button>
       </div>
     </div>
     <div class="table-scroll" id="tablehost"></div>
   </section>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 
 __ECHARTS_TAG__
@@ -125,6 +136,8 @@ __XLSX_TAG__
   var ROWS        = __ROWS_JSON__;
   var MAP_SELECTION = __MAP_SELECTION_JSON__;
   var WARNINGS    = __WARNINGS_JSON__;
+  var CSV_URL     = __CSV_URL_JSON__;
+  var XLSX_URL    = __XLSX_URL_JSON__;
 
   document.getElementById("title").textContent = TITLE;
   document.getElementById("why").textContent = REASONING;
@@ -354,27 +367,61 @@ __XLSX_TAG__
   }
 
   function triggerBlobDownload(blob, filename) {
+    // Works only if the host granted the iframe `allow-downloads`. In a bare
+    // `allow-scripts` sandbox this is a silent no-op, hence the clipboard path.
     try {
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
       a.href = url; a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      return true;
     } catch (e) {
-      // Sandbox without allow-downloads: hand the file to the host instead.
-      var reader = new FileReader();
-      reader.onload = function () { postAction("link", { url: reader.result }); };
-      reader.readAsDataURL(blob);
+      return false;
     }
   }
 
+  // Clipboard copy that works inside a sandboxed iframe (no special permission
+  // needed): select a temporary textarea and execCommand('copy').
+  function copyText(text) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      var ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var toastTimer = null;
+  function showToast(msg) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    if (toastTimer) { clearTimeout(toastTimer); }
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 4000);
+  }
+
   document.getElementById("dl-csv").addEventListener("click", function () {
-    triggerBlobDownload(new Blob([toCSV()], { type: "text/csv;charset=utf-8" }), safeName() + ".csv");
+    if (CSV_URL) { postAction("link", { url: CSV_URL }); return; }
+    var csv = toCSV();
+    triggerBlobDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), safeName() + ".csv");
+    var copied = copyText(csv);
+    showToast(copied
+      ? "CSV copié dans le presse-papiers ✓ — collez-le dans un fichier .csv (le téléchargement direct a aussi été tenté)."
+      : "Téléchargement CSV tenté. S'il ne démarre pas, l'hôte bloque les téléchargements de l'iframe.");
   });
 
   document.getElementById("dl-xlsx").addEventListener("click", function () {
+    if (XLSX_URL) { postAction("link", { url: XLSX_URL }); return; }
     if (typeof XLSX === "undefined") {
-      alert("Export Excel indisponible (SheetJS non chargé) — utilisez CSV.");
+      showToast("SheetJS non chargé (réseau du sandbox ?) — utilisez CSV ou Copier.");
       return;
     }
     var aoa = [COLUMNS].concat(ROWS.map(function (r) {
@@ -384,10 +431,20 @@ __XLSX_TAG__
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Données");
     var out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    triggerBlobDownload(
+    var ok = triggerBlobDownload(
       new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
       safeName() + ".xlsx"
     );
+    showToast(ok
+      ? "Téléchargement Excel tenté. S'il ne démarre pas, l'hôte bloque les téléchargements — utilisez « Copier » (collez dans Excel)."
+      : "Téléchargement bloqué par l'hôte — utilisez « Copier » et collez dans Excel.");
+  });
+
+  document.getElementById("dl-copy").addEventListener("click", function () {
+    var ok = copyText(toCSV());
+    showToast(ok
+      ? "Données copiées dans le presse-papiers ✓ — collez dans Excel ou un fichier .csv."
+      : "Copie impossible dans cet hôte. Sélectionnez le tableau manuellement.");
   });
 
   // ---- mcp-ui action helper ---------------------------------------------
