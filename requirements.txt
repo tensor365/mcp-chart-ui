@@ -1,0 +1,4 @@
+mcp>=1.2.0
+mcp-ui-server>=0.1.0
+pandas>=2.0
+starlette>=0.37

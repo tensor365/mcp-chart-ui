@@ -1,0 +1,17 @@
+services:
+  chart-mcp:
+    build: .
+    image: chart-mcp:latest
+    container_name: chart-mcp
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    # Streamable HTTP endpoint is served at http://localhost:8000/mcp
+    command: ["--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      # How the chart UI loads ECharts/SheetJS inside the host iframe:
+      #   cdn (default) | inline | <base-url>
+      # For an air-gapped / proxied stack, let this server host the JS itself:
+      - CHART_MCP_ASSETS=http://chart-mcp:8000/assets
+      # Or embed everything in the page (no network at all):
+      # - CHART_MCP_ASSETS=inline
