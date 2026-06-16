@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import uuid
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -59,7 +60,9 @@ def _build_transport_security() -> TransportSecuritySettings:
 
 mcp = FastMCP("chart_mcp", transport_security=_build_transport_security())
 
-# mcp-ui URIs must start with this scheme.
+# Base for mcp-ui URIs. A unique suffix is appended per render so multiple
+# charts in one conversation do not share a URI (hosts key resources by URI,
+# which otherwise makes a new chart overwrite the previous one).
 _UI_URI = "ui://chart-mcp/render"
 
 # In-memory cache of vendored asset sources (served over /assets/).
@@ -244,7 +247,7 @@ def render_chart(params: RenderChartInput) -> list[ContentBlock]:
 
     resource = create_ui_resource(
         {
-            "uri": _UI_URI,
+            "uri": f"{_UI_URI}/{uuid.uuid4().hex}",
             "content": {"type": "rawHtml", "htmlString": html},
             # blob (base64) is recommended for large HTML payloads.
             "encoding": "blob",

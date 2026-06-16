@@ -60,7 +60,7 @@ def test_output_has_text_summary_and_resource():
 def test_resource_uri_and_mimetype():
     out = render_chart(RenderChartInput(data=SAMPLE, title="Sales"))
     res = _resource(out)
-    assert str(res["uri"]) == "ui://chart-mcp/render"
+    assert str(res["uri"]).startswith("ui://chart-mcp/render")
     assert res["mimeType"] == "text/html"
 
 
@@ -175,3 +175,27 @@ def test_security_rejects_unlisted_host(monkeypatch):
     mw = TransportSecurityMiddleware(ts)
     assert mw._validate_host("evil.com:8013") is False
     assert mw._validate_host(None) is False
+
+
+# --- unique resource URI (multiple charts in one conversation) -------------
+
+def test_each_render_has_unique_uri():
+    uri1 = str(_resource(render_chart(RenderChartInput(data=SAMPLE, title="A")))["uri"])
+    uri2 = str(_resource(render_chart(RenderChartInput(data=SAMPLE, title="B")))["uri"])
+    assert uri1.startswith("ui://chart-mcp/render/")
+    assert uri2.startswith("ui://chart-mcp/render/")
+    assert uri1 != uri2  # would collide (overwrite) if shared
+
+
+def test_downloads_activate_with_public_url(monkeypatch):
+    monkeypatch.setenv("CHART_MCP_PUBLIC_URL", "http://app.internal:8013")
+    page = _html(render_chart(RenderChartInput(data=SAMPLE, title="DL")))
+    assert "http://app.internal:8013/download/" in page
+
+
+def test_no_public_url_no_download_link(monkeypatch):
+    monkeypatch.delenv("CHART_MCP_PUBLIC_URL", raising=False)
+    monkeypatch.delenv("CHART_MCP_ASSETS", raising=False)
+    page = _html(render_chart(RenderChartInput(data=SAMPLE, title="DL")))
+    # Falls back to clipboard copy (no server download URL injected).
+    assert "/download/" not in page

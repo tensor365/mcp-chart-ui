@@ -117,7 +117,7 @@ Le graphique tourne dans l'iframe sandboxée de l'hôte : les `<script>` doivent
 ## Tests
 
 ```bash
-pytest        # 110 tests, un fichier par fonctionnalité
+pytest        # 113 tests, un fichier par fonctionnalité
 ```
 
 - `test_data_utils.py` — parsing + détection de type de colonne
@@ -132,6 +132,8 @@ pytest        # 110 tests, un fichier par fonctionnalité
 
 - **Assets** : ECharts/SheetJS se chargent **dans le navigateur** (iframe). `CHART_MCP_ASSETS` contrôle la source — `inline` (recommandé si le sandbox bloque le réseau : tout est embarqué, aucune requête), `cdn`, ou une URL. ⚠️ Une URL doit être joignable **depuis le navigateur** : un nom de service Docker comme `http://chart-mcp:8000` ne se résout pas côté client — utiliser l'URL publique (ex. `http://applflwlrec001.chronodrive.local:8013/assets`). Si ECharts n'apparaît pas (« Impossible de charger ECharts »), passer en `inline`.
 - **Hauteur** : l'iframe signale sa taille à l'hôte via un `ResizeObserver` + message mcp-ui `ui-size-change`, et la page n'utilise pas de hauteur fixe — l'hôte ajuste donc la hauteur au contenu (pas de scrollbar).
+- **Téléchargement CSV/Excel** : l'iframe sandboxée (`allow-scripts`) ne peut pas télécharger de fichier. Le serveur génère donc les fichiers et les sert sur `/download/...` ; les boutons ouvrent cette URL via l'hôte (action mcp-ui `link`). Cela nécessite `CHART_MCP_PUBLIC_URL` = l'URL **joignable par le navigateur** de ce serveur (ex. `http://applflwlrec001.chronodrive.local:8013`). Sans elle, les boutons retombent sur la copie presse-papiers (« Copier »). ⚠️ En mode `CHART_MCP_ASSETS=inline`, aucune URL n'est dérivée des assets : définir `CHART_MCP_PUBLIC_URL` explicitement pour des téléchargements de fichiers.
+- **Plusieurs graphiques** : chaque rendu reçoit un URI mcp-ui unique (`ui://chart-mcp/render/<id>`), pour que plusieurs graphiques dans une même conversation ne s'écrasent pas (les hôtes indexent par URI).
 - **Téléchargement** : le téléchargement par ancre nécessite que l'hôte autorise `allow-downloads` sur l'iframe. À défaut, le fichier est transmis à l'hôte via une action mcp-ui `link` (data-URL) en repli.
 - Export Excel **réel** (`.xlsx`) via SheetJS ; le CSV est généré nativement (BOM UTF-8 pour Excel).
 - **En-tête Host / erreur 421** : en transport HTTP, le SDK MCP active une protection anti DNS-rebinding qui ne tolère que `localhost` par défaut. Si le serveur est joint via un vrai nom d'hôte, déclarer celui-ci dans `CHART_MCP_ALLOWED_HOSTS` (ex. `applflwlrec001.chronodrive.local:*`, `:*` = tout port ; `*` désactive la vérification). Sinon les requêtes sont rejetées en `421 Misdirected Request` (« Invalid Host header »). Le chemin de l'endpoint (`/mcp` par défaut) est ajustable via `CHART_MCP_HTTP_PATH`.

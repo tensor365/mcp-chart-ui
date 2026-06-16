@@ -19,6 +19,13 @@ services:
       #                   docker service name (http://chart-mcp:8000 won't resolve
       #                   in the browser).
       - CHART_MCP_ASSETS=inline
+      # Browser-reachable base URL of THIS server. Required for working CSV/Excel
+      # downloads: the buttons open <base>/download/... via the host (real file,
+      # works even though the iframe sandbox blocks in-page downloads). Must be
+      # what the browser can reach (same host:port the MCP is exposed on), NOT
+      # the docker service name. With inline assets this is the only way to get
+      # downloads, since no URL is derived from CHART_MCP_ASSETS.
+      - CHART_MCP_PUBLIC_URL=http://applflwlrec001.chronodrive.local:8013
       # DNS-rebinding protection: the streamable-HTTP transport returns 421
       # "Invalid Host header" unless the public Host is allow-listed. Set the
       # hostname(s) clients use (":*" matches any port); "*" disables the check.
