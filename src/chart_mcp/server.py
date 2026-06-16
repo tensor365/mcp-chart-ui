@@ -266,6 +266,16 @@ def main() -> None:
         http_path = os.getenv("CHART_MCP_HTTP_PATH", "").strip()
         if http_path:
             mcp.settings.streamable_http_path = http_path
+        ts = mcp.settings.transport_security
+        # Printed to stdout so it is visible in `docker logs` and confirms which
+        # build is running (helps diagnose stale images / 421 Host errors).
+        print(
+            f"[chart-mcp] DNS-rebinding protection="
+            f"{getattr(ts, 'enable_dns_rebinding_protection', None)} "
+            f"allowed_hosts={getattr(ts, 'allowed_hosts', None)} "
+            f"path={mcp.settings.streamable_http_path}",
+            flush=True,
+        )
         mcp.run(transport="streamable-http")
     else:
         mcp.run()
